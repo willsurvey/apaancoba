@@ -1,0 +1,28 @@
+{
+  "functions": {
+    "api/*.js": {
+      "maxDuration": 40
+    }
+  },
+  "rewrites": [
+    { "source": "/admin", "destination": "/admin/index.html" }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron",
+      "schedule": "32 6 * * 1,2,3,4"
+    },
+    {
+      "path": "/api/cron",
+      "schedule": "1 11 * * 1,2,3,4"
+    },
+    {
+      "path": "/api/cron",
+      "schedule": "2 6 * * 5"
+    },
+    {
+      "path": "/api/cron",
+      "schedule": "1 11 * * 5"
+    }
+  ]
+}
