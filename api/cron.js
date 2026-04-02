@@ -49,7 +49,7 @@ async function broadcast(messages) {
   for (const chatId of chats) {
     try {
       for (const msg of messages) {
-        await bot.api.sendMessage(chatId, msg, { parse_mode: 'Markdown' });
+        await bot.api.sendMessage(chatId, msg, { parse_mode: 'HTML' });
         await sleep(350);
       }
       console.log(`✅ Sent to ${chatId}`);

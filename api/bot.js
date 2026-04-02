@@ -17,79 +17,75 @@ const bot = new Bot(process.env.BOT_TOKEN, {
 
 // ── /start ─────────────────────────────────────────────────────────────────
 bot.command('start', async (ctx) => {
-  const chatId = ctx.chat.id;
+  const chatId  = ctx.chat.id;
   const isGroup = ctx.chat.type === 'group' || ctx.chat.type === 'supergroup';
 
   try {
-    if (isGroup) {
-      await addGroup(chatId);
-    } else {
-      await addUser(chatId);
-    }
+    isGroup ? await addGroup(chatId) : await addUser(chatId);
   } catch (e) {
     console.error('Register error:', e);
   }
 
-  const target = isGroup ? `Grup *${ctx.chat.title}*` : `*${ctx.from?.first_name || 'Anda'}*`;
+  const target = isGroup
+    ? `Grup <b>${ctx.chat.title}</b>`
+    : `<b>${ctx.from?.first_name || 'Anda'}</b>`;
+
   await ctx.reply(
     `👋 Halo, ${target}!\n\n` +
-    `✅ Berhasil terdaftar untuk menerima *Bidikan Saham Harian*.\n\n` +
-    `📌 ID: \`${chatId}\`\n\n` +
+    `✅ Berhasil terdaftar untuk menerima <b>Bidikan Saham Harian</b>.\n\n` +
+    `📌 ID: <code>${chatId}</code>\n\n` +
     `📢 Anda akan mendapat notifikasi otomatis setiap hari.\n` +
     `📊 Gunakan /bidikan untuk cek sinyal sekarang.`,
-    { parse_mode: 'Markdown' }
+    { parse_mode: 'HTML' }
   );
 });
 
 // ── /bidikan ───────────────────────────────────────────────────────────────
 bot.command('bidikan', async (ctx) => {
-  const loading = await ctx.reply('⏳ _Mengambil data screening..._', { parse_mode: 'Markdown' });
+  const loading = await ctx.reply('⏳ <i>Mengambil data screening...</i>', { parse_mode: 'HTML' });
 
   try {
     const result = await fetchScreeningData();
 
-    // Hapus pesan loading
     try { await ctx.api.deleteMessage(ctx.chat.id, loading.message_id); } catch (_) {}
 
     if (!result.success) {
-      await ctx.reply(formatErrorMessage(), { parse_mode: 'Markdown' });
+      await ctx.reply(formatErrorMessage(), { parse_mode: 'HTML' });
       return;
     }
 
     const messages = formatBidikanMessages(result.data);
-
     for (const msg of messages) {
-      await ctx.reply(msg, { parse_mode: 'Markdown' });
+      await ctx.reply(msg, { parse_mode: 'HTML' });
       await sleep(400);
     }
 
   } catch (error) {
     console.error('/bidikan error:', error);
     try { await ctx.api.deleteMessage(ctx.chat.id, loading.message_id); } catch (_) {}
-    await ctx.reply(formatErrorMessage(), { parse_mode: 'Markdown' });
+    await ctx.reply(formatErrorMessage(), { parse_mode: 'HTML' });
   }
 });
 
 // ── /help ──────────────────────────────────────────────────────────────────
 bot.command('help', async (ctx) => {
   await ctx.reply(
-    `📖 *Panduan Bot Saham*\n\n` +
-    `*Perintah tersedia:*\n` +
-    `/start    — Daftar & aktifkan notifikasi\n` +
+    `📖 <b>Panduan Bot Saham</b>\n\n` +
+    `<b>Perintah tersedia:</b>\n` +
+    `/start    — Daftar &amp; aktifkan notifikasi\n` +
     `/bidikan  — Lihat sinyal saham hari ini\n` +
     `/help     — Tampilkan panduan ini\n\n` +
-    `📢 *Notifikasi otomatis* akan dikirim setiap hari.\n\n` +
-    `⚠️ _Bukan ajakan beli/jual. DYOR._`,
-    { parse_mode: 'Markdown' }
+    `📢 <b>Notifikasi otomatis</b> akan dikirim setiap hari.\n\n` +
+    `⚠️ <i>Bukan ajakan beli/jual. DYOR.</i>`,
+    { parse_mode: 'HTML' }
   );
 });
 
 // ── Pesan biasa (auto-register) ────────────────────────────────────────────
 bot.on('message', async (ctx) => {
-  const chatId   = ctx.chat.id;
-  const isGroup  = ctx.chat.type === 'group' || ctx.chat.type === 'supergroup';
-  const hasCmd   = ctx.message.text?.startsWith('/');
-  if (hasCmd) return; // sudah ditangani command handler
+  const chatId  = ctx.chat.id;
+  const isGroup = ctx.chat.type === 'group' || ctx.chat.type === 'supergroup';
+  if (ctx.message.text?.startsWith('/')) return;
 
   try {
     if (isGroup) {
@@ -99,8 +95,8 @@ bot.on('message', async (ctx) => {
       await ctx.reply(
         `✅ Anda terdaftar!\n\n` +
         `Ketik /bidikan untuk melihat sinyal saham hari ini.\n` +
-        `ID Anda: \`${chatId}\``,
-        { parse_mode: 'Markdown' }
+        `ID Anda: <code>${chatId}</code>`,
+        { parse_mode: 'HTML' }
       );
     }
   } catch (error) {
