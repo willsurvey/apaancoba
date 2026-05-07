@@ -1,6 +1,14 @@
 import { Bot } from 'grammy';
 import { fetchScreeningData } from '../lib/api-fetcher.js';
-import { formatBidikanMessages, formatErrorMessage } from '../lib/message-mapper.js';
+import {
+  formatMarketOverview,
+  formatIntradayMessage,
+  formatAraMessage,
+  formatBsjpMessage,
+  formatBpjsMessage,
+  formatSwingMessage,
+  formatHelpMessage,
+} from '../lib/message-mapper.js';
 import { addUser, addGroup } from '../lib/kv-store.js';
 
 const bot = new Bot(process.env.BOT_TOKEN, {
@@ -15,7 +23,35 @@ const bot = new Bot(process.env.BOT_TOKEN, {
   },
 });
 
-// ── /start ─────────────────────────────────────────────────────────────────
+// ── Helpers ────────────────────────────────────────────────────────────────
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function handleStrategyCommand(ctx, formatterFn) {
+  const loading = await ctx.reply('⏳ <i>Mengambil data screening...</i>', { parse_mode: 'HTML' });
+  try {
+    const result = await fetchScreeningData();
+    try { await ctx.api.deleteMessage(ctx.chat.id, loading.message_id); } catch (_) {}
+    
+    if (!result.success) {
+      await ctx.reply('⚠️ <b>GAGAL MENGAMBIL DATA</b>\nServer tidak merespons.', { parse_mode: 'HTML' });
+      return;
+    }
+    
+    const messages = formatterFn(result.data);
+    for (const msg of messages) {
+      await ctx.reply(msg, { parse_mode: 'HTML' });
+      await sleep(400);
+    }
+  } catch (error) {
+    console.error('Command error:', error);
+    try { await ctx.api.deleteMessage(ctx.chat.id, loading.message_id); } catch (_) {}
+    await ctx.reply('⚠️ Terjadi kesalahan sistem.', { parse_mode: 'HTML' });
+  }
+}
+
+// ── Commands ───────────────────────────────────────────────────────────────
 bot.command('start', async (ctx) => {
   const chatId  = ctx.chat.id;
   const isGroup = ctx.chat.type === 'group' || ctx.chat.type === 'supergroup';
@@ -26,62 +62,60 @@ bot.command('start', async (ctx) => {
     console.error('Register error:', e);
   }
 
-  const target = isGroup
-    ? `Grup <b>${ctx.chat.title}</b>`
-    : `<b>${ctx.from?.first_name || 'Anda'}</b>`;
+  const target = isGroup ? `Grup <b>${ctx.chat.title}</b>` : `<b>${ctx.from?.first_name || 'Anda'}</b>`;
 
   await ctx.reply(
-    `👋 Halo, ${target}!\n\n` +
-    `✅ Berhasil terdaftar untuk menerima <b>Bidikan Saham Harian</b>.\n\n` +
-    `📌 ID: <code>${chatId}</code>\n\n` +
-    `📢 Anda akan mendapat notifikasi otomatis setiap hari.\n` +
-    `📊 Gunakan /bidikan untuk cek sinyal sekarang.`,
+    `🤖 <b>BC TRADER BOT</b> — Screening Otomatis Saham IHSG\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
+    `Halo, ${target}! 👋\n✅ Terdaftar sebagai subscriber aktif.\n📌 ID: <code>${chatId}</code>\n\n` +
+    `⚡ <b>5 PIPELINE AKTIF</b>\n🔵 /bidikan — Intraday SMC\n🔴 /ara — Calon ARA\n🟡 /bsjp — Beli Sore, Jual Pagi\n` +
+    `🟠 /bpjs — Beli Pagi, Jual Sore\n🟢 /swing — VCP Stage 2\n\n` +
+    `Ketik /help untuk panduan lengkap.`,
     { parse_mode: 'HTML' }
   );
 });
 
-// ── /bidikan ───────────────────────────────────────────────────────────────
-bot.command('bidikan', async (ctx) => {
-  const loading = await ctx.reply('⏳ <i>Mengambil data screening...</i>', { parse_mode: 'HTML' });
+bot.command('help', async (ctx) => {
+  await ctx.reply(formatHelpMessage(), { parse_mode: 'HTML' });
+});
 
+bot.command('market', async (ctx) => {
+  const loading = await ctx.reply('⏳ <i>Memuat market overview...</i>', { parse_mode: 'HTML' });
   try {
     const result = await fetchScreeningData();
-
     try { await ctx.api.deleteMessage(ctx.chat.id, loading.message_id); } catch (_) {}
-
     if (!result.success) {
-      await ctx.reply(formatErrorMessage(), { parse_mode: 'HTML' });
+      await ctx.reply('⚠️ Gagal mengambil data.', { parse_mode: 'HTML' });
       return;
     }
-
-    const messages = formatBidikanMessages(result.data);
-    for (const msg of messages) {
-      await ctx.reply(msg, { parse_mode: 'HTML' });
-      await sleep(400);
-    }
-
+    await ctx.reply(formatMarketOverview(result.data), { parse_mode: 'HTML' });
   } catch (error) {
-    console.error('/bidikan error:', error);
-    try { await ctx.api.deleteMessage(ctx.chat.id, loading.message_id); } catch (_) {}
-    await ctx.reply(formatErrorMessage(), { parse_mode: 'HTML' });
+    console.error(error);
   }
 });
 
-// ── /help ──────────────────────────────────────────────────────────────────
-bot.command('help', async (ctx) => {
-  await ctx.reply(
-    `📖 <b>Panduan Bot Saham</b>\n\n` +
-    `<b>Perintah tersedia:</b>\n` +
-    `/start    — Daftar &amp; aktifkan notifikasi\n` +
-    `/bidikan  — Lihat sinyal saham hari ini\n` +
-    `/help     — Tampilkan panduan ini\n\n` +
-    `📢 <b>Notifikasi otomatis</b> akan dikirim setiap hari.\n\n` +
-    `⚠️ <i>Bukan ajakan beli/jual. DYOR.</i>`,
-    { parse_mode: 'HTML' }
-  );
+bot.command('update', async (ctx) => {
+  const loading = await ctx.reply('⏳ <i>Cek status...</i>', { parse_mode: 'HTML' });
+  try {
+    const result = await fetchScreeningData();
+    try { await ctx.api.deleteMessage(ctx.chat.id, loading.message_id); } catch (_) {}
+    if (!result.success || !result.data?.meta) {
+      await ctx.reply('⚠️ Data tidak tersedia.', { parse_mode: 'HTML' });
+      return;
+    }
+    const meta = result.data.meta;
+    await ctx.reply(`🔄 <b>STATUS UPDATE SCREENER</b>\n📅 ${meta.date}\nUpdate terakhir: <b>${meta.generated_at}</b>\nMode: ✅ ${meta.mode}`, { parse_mode: 'HTML' });
+  } catch (error) {
+    console.error(error);
+  }
 });
 
-// ── Pesan biasa (auto-register) ────────────────────────────────────────────
+bot.command('bidikan', (ctx) => handleStrategyCommand(ctx, formatIntradayMessage));
+bot.command('ara', (ctx) => handleStrategyCommand(ctx, formatAraMessage));
+bot.command('bsjp', (ctx) => handleStrategyCommand(ctx, formatBsjpMessage));
+bot.command('bpjs', (ctx) => handleStrategyCommand(ctx, formatBpjsMessage));
+bot.command('swing', (ctx) => handleStrategyCommand(ctx, formatSwingMessage));
+
+// ── Auto-register on normal messages ───────────────────────────────────────
 bot.on('message', async (ctx) => {
   const chatId  = ctx.chat.id;
   const isGroup = ctx.chat.type === 'group' || ctx.chat.type === 'supergroup';
@@ -92,19 +126,13 @@ bot.on('message', async (ctx) => {
       await addGroup(chatId);
     } else {
       await addUser(chatId);
-      await ctx.reply(
-        `✅ Anda terdaftar!\n\n` +
-        `Ketik /bidikan untuk melihat sinyal saham hari ini.\n` +
-        `ID Anda: <code>${chatId}</code>`,
-        { parse_mode: 'HTML' }
-      );
     }
   } catch (error) {
     console.error('Message handler error:', error);
   }
 });
 
-// ── Vercel Serverless Handler ──────────────────────────────────────────────
+// ── Serverless Handlers ────────────────────────────────────────────────────
 export async function POST(req) {
   try {
     const body = await req.json();
@@ -112,20 +140,10 @@ export async function POST(req) {
     return new Response('OK', { status: 200 });
   } catch (error) {
     console.error('Webhook error:', error);
-    return new Response(
-      JSON.stringify({ error: error.message }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
-    );
+    return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
   }
 }
 
 export async function GET() {
-  return new Response(
-    JSON.stringify({ status: 'Bot is running! 🤖', tokenSet: !!process.env.BOT_TOKEN }),
-    { status: 200, headers: { 'Content-Type': 'application/json' } }
-  );
-}
-
-function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
+  return new Response(JSON.stringify({ status: 'Bot is running! 🤖', tokenSet: !!process.env.BOT_TOKEN }), { status: 200, headers: { 'Content-Type': 'application/json' } });
 }

@@ -1,7 +1,7 @@
 import { Bot } from 'grammy';
 import { getUsers, getGroups } from '../lib/kv-store.js';
 import { fetchScreeningData } from '../lib/api-fetcher.js';
-import { formatBidikanMessages, formatErrorMessage } from '../lib/message-mapper.js';
+import { formatCronBroadcast } from '../lib/message-mapper.js';
 
 const bot = new Bot(process.env.BOT_TOKEN);
 
@@ -13,15 +13,15 @@ export async function GET() {
 
     if (!result.success) {
       console.error('API fetch failed:', result.error);
-      await broadcast([formatErrorMessage()]);
+      await broadcast(['⚠️ <b>CRON ERROR: GAGAL MENGAMBIL DATA</b>\nServer data tidak merespons.']);
       return new Response(
         JSON.stringify({ success: false, error: result.error }),
         { status: 500, headers: { 'Content-Type': 'application/json' } }
       );
     }
 
-    const messages = formatBidikanMessages(result.data);
-    console.log(`Formatted into ${messages.length} message(s)`);
+    const messages = [formatCronBroadcast(result.data)];
+    console.log(`Formatted into ${messages.length} message(s) for broadcast.`);
 
     await broadcast(messages);
 
@@ -50,7 +50,7 @@ async function broadcast(messages) {
     try {
       for (const msg of messages) {
         await bot.api.sendMessage(chatId, msg, { parse_mode: 'HTML' });
-        await sleep(350);
+        await sleep(350); // Telegram rate limit safety
       }
       console.log(`✅ Sent to ${chatId}`);
     } catch (err) {
