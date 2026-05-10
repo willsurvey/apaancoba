@@ -13,7 +13,7 @@
       padding: 20px;
     }
     .container {
-      max-width: 500px;
+      max-width: 600px;
       margin: 0 auto;
       background: white;
       border-radius: 16px;
@@ -22,6 +22,14 @@
     }
     h1 { text-align: center; margin-bottom: 10px; color: #333; }
     .subtitle { text-align: center; color: #666; margin-bottom: 30px; }
+    
+    .tabs { display: flex; border-bottom: 2px solid #eee; margin-bottom: 20px; }
+    .tab { flex: 1; text-align: center; padding: 12px; cursor: pointer; font-weight: 600; color: #666; transition: 0.2s; }
+    .tab:hover { background: #f9f9f9; }
+    .tab.active { color: #667eea; border-bottom: 2px solid #667eea; margin-bottom: -2px; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    
     .form-group { margin-bottom: 20px; }
     label { display: block; margin-bottom: 8px; font-weight: 600; color: #333; }
     input, textarea {
@@ -47,11 +55,9 @@
       cursor: pointer;
       transition: transform 0.2s, box-shadow 0.2s;
     }
-    button:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
-    }
+    button:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4); }
     button:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+    
     .stats {
       background: #f5f5f5;
       padding: 15px;
@@ -71,6 +77,18 @@
       color: #0066cc;
       margin-bottom: 20px;
     }
+
+    /* List Users */
+    .list-container { max-height: 400px; overflow-y: auto; border: 1px solid #eee; border-radius: 8px; }
+    .list-item { display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid #eee; }
+    .list-item:last-child { border-bottom: none; }
+    .list-item.blocked { background: #fff0f0; }
+    .item-info { display: flex; flex-direction: column; }
+    .item-name { font-weight: 600; font-size: 14px; color: #333; }
+    .item-meta { font-size: 12px; color: #777; margin-top: 4px; }
+    .btn-action { padding: 6px 12px; border-radius: 4px; border: none; font-size: 12px; font-weight: 600; cursor: pointer; color: white; width: auto; }
+    .btn-action.block { background: #dc3545; }
+    .btn-action.unblock { background: #28a745; }
   </style>
 </head>
 <body>
@@ -78,43 +96,71 @@
     <h1>📊 Admin Panel</h1>
     <p class="subtitle">Bot Trading Plan Saham</p>
 
-    <div class="stats" id="stats">
-      <span>👥 User: <b id="userCount">-</b></span>
-      <span>👥 Grup: <b id="groupCount">-</b></span>
+    <div class="tabs">
+      <div class="tab active" onclick="switchTab(event, 'upload')">Broadcast Data</div>
+      <div class="tab" onclick="switchTab(event, 'users')">Kelola Pengguna</div>
     </div>
 
-    <div class="info">
-      ℹ️ <b>Template Excel:</b> Hanya isi Bias, Entry, SL, TP (tanpa nama saham)
+    <!-- TAB 1: UPLOAD -->
+    <div id="tab-upload" class="tab-content active">
+      <div class="stats">
+        <span>👥 User Aktif: <b id="userCount">-</b></span>
+        <span>👥 Grup Aktif: <b id="groupCount">-</b></span>
+      </div>
+
+      <div class="info">
+        ℹ️ <b>Template Excel:</b> Hanya isi Bias, Entry, SL, TP (tanpa nama saham)
+      </div>
+
+      <form id="uploadForm">
+        <div class="form-group">
+          <label for="stockCode">1️⃣ Kode Saham (Wajib)</label>
+          <input type="text" id="stockCode" name="stockCode" placeholder="Contoh: GOTO" required>
+        </div>
+
+        <div class="form-group">
+          <label for="companyName">2️⃣ Nama Perusahaan (Wajib)</label>
+          <input type="text" id="companyName" name="companyName" placeholder="Contoh: PT GoTo Gojek Tokopedia" required>
+        </div>
+
+        <div class="form-group">
+          <label for="excelFile">3️⃣ File Excel Plan (Wajib)</label>
+          <input type="file" id="excelFile" name="excelFile" class="file-input" accept=".xlsx,.xls" required>
+        </div>
+
+        <div class="form-group">
+          <label for="message">💬 Pesan Tambahan (Optional)</label>
+          <textarea id="message" name="message" placeholder="Contoh: Semangat trading hari ini! 🚀"></textarea>
+        </div>
+
+        <button type="submit" id="submitBtn">🚀 KIRIM KE SEMUA USER</button>
+      </form>
+      <div class="result" id="result"></div>
     </div>
 
-    <form id="uploadForm">
-      <div class="form-group">
-        <label for="stockCode">1️⃣ Kode Saham (Wajib)</label>
-        <input type="text" id="stockCode" name="stockCode" placeholder="Contoh: GOTO" required>
-      </div>
-
-      <div class="form-group">
-        <label for="companyName">2️⃣ Nama Perusahaan (Wajib)</label>
-        <input type="text" id="companyName" name="companyName" placeholder="Contoh: PT GoTo Gojek Tokopedia" required>
-      </div>
-
-      <div class="form-group">
-        <label for="excelFile">3️⃣ File Excel Plan (Wajib)</label>
-        <input type="file" id="excelFile" name="excelFile" class="file-input" accept=".xlsx,.xls" required>
-      </div>
-
-      <div class="form-group">
-        <label for="message">💬 Pesan Tambahan (Optional)</label>
-        <textarea id="message" name="message" placeholder="Contoh: Semangat trading hari ini! 🚀"></textarea>
-      </div>
-
-      <button type="submit" id="submitBtn">🚀 KIRIM KE SEMUA USER</button>
-    </form>
-
-    <div class="result" id="result"></div>
+    <!-- TAB 2: USERS -->
+    <div id="tab-users" class="tab-content">
+      <h3 style="margin-bottom:10px;">Daftar Pengguna (User)</h3>
+      <div class="list-container" id="userList">Loading...</div>
+      
+      <h3 style="margin-top:20px; margin-bottom:10px;">Daftar Grup</h3>
+      <div class="list-container" id="groupList">Loading...</div>
+    </div>
   </div>
 
   <script>
+    function switchTab(event, tabId) {
+      document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+      
+      event.target.classList.add('active');
+      document.getElementById('tab-' + tabId).classList.add('active');
+
+      if (tabId === 'users') {
+        loadUsersList();
+      }
+    }
+
     async function loadStats() {
       try {
         const res = await fetch('/api/upload');
@@ -127,6 +173,7 @@
     }
     loadStats();
 
+    // Handle Upload
     document.getElementById('uploadForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       
@@ -158,6 +205,75 @@
       btn.disabled = false;
       btn.textContent = '🚀 KIRIM KE SEMUA USER';
     });
+
+    // Handle Users/Groups List
+    async function loadUsersList() {
+      try {
+        const res = await fetch('/api/users');
+        const data = await res.json();
+        
+        const userList = document.getElementById('userList');
+        const groupList = document.getElementById('groupList');
+
+        if (data.users && data.users.length > 0) {
+          userList.innerHTML = data.users.map(u => \`
+            <div class="list-item \${u.blocked ? 'blocked' : ''}">
+              <div class="item-info">
+                <span class="item-name">\${u.name} (@\${u.username})</span>
+                <span class="item-meta">ID: \${u.id} \${u.blocked ? '• ⛔ DIBLOKIR' : ''}</span>
+              </div>
+              <button class="btn-action \${u.blocked ? 'unblock' : 'block'}" onclick="toggleBlock('\${u.id}', 'user', \${!u.blocked})">
+                \${u.blocked ? 'Buka Blokir' : 'Blokir'}
+              </button>
+            </div>
+          \`).join('');
+        } else {
+          userList.innerHTML = '<div style="padding:15px;text-align:center;color:#666;">Belum ada user terdaftar.</div>';
+        }
+
+        if (data.groups && data.groups.length > 0) {
+          groupList.innerHTML = data.groups.map(g => \`
+            <div class="list-item \${g.blocked ? 'blocked' : ''}">
+              <div class="item-info">
+                <span class="item-name">\${g.title}</span>
+                <span class="item-meta">ID: \${g.id} \${g.blocked ? '• ⛔ DIBLOKIR' : ''}</span>
+              </div>
+              <button class="btn-action \${g.blocked ? 'unblock' : 'block'}" onclick="toggleBlock('\${g.id}', 'group', \${!g.blocked})">
+                \${g.blocked ? 'Buka Blokir' : 'Blokir'}
+              </button>
+            </div>
+          \`).join('');
+        } else {
+          groupList.innerHTML = '<div style="padding:15px;text-align:center;color:#666;">Belum ada grup terdaftar.</div>';
+        }
+
+      } catch (e) {
+        console.error(e);
+        document.getElementById('userList').innerHTML = 'Gagal memuat data.';
+        document.getElementById('groupList').innerHTML = 'Gagal memuat data.';
+      }
+    }
+
+    async function toggleBlock(id, type, block) {
+      if (!confirm(\`Yakin ingin \${block ? 'memblokir' : 'membuka blokir'} \${type} ini?\`)) return;
+      
+      try {
+        const res = await fetch('/api/users', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id, type, action: block ? 'block' : 'unblock' })
+        });
+        const result = await res.json();
+        if (result.success) {
+          loadUsersList(); // reload list
+          loadStats(); // reload stats
+        } else {
+          alert('Error: ' + result.error);
+        }
+      } catch (e) {
+        alert('Gagal menghubungi server.');
+      }
+    }
   </script>
 </body>
 </html>

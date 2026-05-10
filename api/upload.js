@@ -1,5 +1,5 @@
 import { Bot } from 'grammy';
-import { getUsers, getGroups } from '../lib/kv-store.js';
+import { getActiveUserIds, getActiveGroupIds } from '../lib/kv-store.js';
 import { parseExcel } from '../lib/excel-parser.js';
 import { formatTradingPlan, getDateTime } from '../lib/message-format.js';
 
@@ -28,8 +28,8 @@ export async function POST(req) {
 
     const finalMessage = message ? `${message}\n\n${formattedMessage}` : formattedMessage;
 
-    const users = await getUsers();
-    const groups = await getGroups();
+    const users = await getActiveUserIds();
+    const groups = await getActiveGroupIds();
     const allChats = [...users, ...groups];
 
     let successCount = 0;
@@ -66,8 +66,8 @@ export async function POST(req) {
 }
 
 export async function GET() {
-  const users = await getUsers();
-  const groups = await getGroups();
+  const users = await getActiveUserIds();
+  const groups = await getActiveGroupIds();
   return new Response(
     JSON.stringify({ users: users.length, groups: groups.length }),
     { status: 200, headers: { 'Content-Type': 'application/json' } }

@@ -9,7 +9,13 @@ import {
   formatSwingMessage,
   formatHelpMessage,
 } from '../lib/message-mapper.js';
-import { addUser, addGroup } from '../lib/kv-store.js';
+import { addUser, addGroup, getUsersDetails, getGroupsDetails, saveUsers, saveGroups } from '../lib/kv-store.js';
+
+// HTML escape helper
+function esc(val) {
+  if (val == null) return '-';
+  return String(val).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
 
 const bot = new Bot(process.env.BOT_TOKEN, {
   botInfo: {
@@ -21,6 +27,26 @@ const bot = new Bot(process.env.BOT_TOKEN, {
     can_read_all_group_messages: false,
     supports_inline_queries: false,
   },
+});
+
+// ── Middleware: Block Check ────────────────────────────────────────────────
+bot.use(async (ctx, next) => {
+  const chatId = String(ctx.chat?.id);
+  if (!chatId || chatId === 'undefined') return await next();
+
+  const isGroup = ctx.chat?.type === 'group' || ctx.chat?.type === 'supergroup';
+  
+  if (isGroup) {
+    const groups = await getGroupsDetails();
+    const group = groups.find(g => String(g.id) === chatId);
+    if (group && group.blocked) return;
+  } else {
+    const users = await getUsersDetails();
+    const user = users.find(u => String(u.id) === chatId);
+    if (user && user.blocked) return;
+  }
+
+  await next();
 });
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -51,17 +77,23 @@ async function handleStrategyCommand(ctx, formatterFn) {
   }
 }
 
+// ── Admin helper: hanya izinkan owner bot ────────────────────────────────
+const ADMIN_IDS = (process.env.ADMIN_TELEGRAM_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
+function isAdmin(ctx) {
+  return ADMIN_IDS.includes(String(ctx.from?.id));
+}
+
 // ── Commands ───────────────────────────────────────────────────────────────
 bot.command('start', async (ctx) => {
-  const chatId  = ctx.chat.id;
   const isGroup = ctx.chat.type === 'group' || ctx.chat.type === 'supergroup';
 
   try {
-    isGroup ? await addGroup(chatId) : await addUser(chatId);
+    isGroup ? await addGroup(ctx.chat) : await addUser(ctx.from);
   } catch (e) {
     console.error('Register error:', e);
   }
 
+  const chatId = ctx.chat.id;
   const target = isGroup ? `Grup <b>${ctx.chat.title}</b>` : `<b>${ctx.from?.first_name || 'Anda'}</b>`;
 
   await ctx.reply(
@@ -115,17 +147,98 @@ bot.command('bsjp', (ctx) => handleStrategyCommand(ctx, formatBsjpMessage));
 bot.command('bpjs', (ctx) => handleStrategyCommand(ctx, formatBpjsMessage));
 bot.command('swing', (ctx) => handleStrategyCommand(ctx, formatSwingMessage));
 
+// ── Admin Commands (hanya untuk pemilik bot) ───────────────────────────────
+bot.command('users', async (ctx) => {
+  if (!isAdmin(ctx)) return;
+  try {
+    const users = await getUsersDetails();
+    const groups = await getGroupsDetails();
+    const activeU = users.filter(u => !u.blocked).length;
+    const activeG = groups.filter(g => !g.blocked).length;
+
+    let msg = `👥 <b>DAFTAR SUBSCRIBER</b>\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    msg += `📊 User: <b>${activeU} aktif</b> / ${users.length} total\n`;
+    msg += `📊 Grup: <b>${activeG} aktif</b> / ${groups.length} total\n\n`;
+
+    if (users.length > 0) {
+      msg += `<b>👤 USER:</b>\n`;
+      users.forEach((u, i) => {
+        const status = u.blocked ? '⛔' : '✅';
+        msg += `${status} ${i+1}. <b>${esc(u.name)}</b> (@${esc(u.username)})\n   ID: <code>${u.id}</code>\n`;
+      });
+    }
+    if (groups.length > 0) {
+      msg += `\n<b>👥 GRUP:</b>\n`;
+      groups.forEach((g, i) => {
+        const status = g.blocked ? '⛔' : '✅';
+        msg += `${status} ${i+1}. <b>${esc(g.title)}</b>\n   ID: <code>${g.id}</code>\n`;
+      });
+    }
+    msg += `\n💡 <i>/blokir [ID] — blokir user/grup\n/unblokir [ID] — buka blokir</i>`;
+    await ctx.reply(msg, { parse_mode: 'HTML' });
+  } catch (e) {
+    await ctx.reply('❌ Error: ' + e.message);
+  }
+});
+
+bot.command('blokir', async (ctx) => {
+  if (!isAdmin(ctx)) return;
+  const targetId = ctx.message.text.split(' ')[1]?.trim();
+  if (!targetId) return ctx.reply('⚠️ Format: /blokir [chat_id]');
+
+  try {
+    let done = false;
+
+    const users = await getUsersDetails();
+    const user = users.find(u => String(u.id) === targetId);
+    if (user) { user.blocked = true; await saveUsers(users); done = true; }
+
+    if (!done) {
+      const groups = await getGroupsDetails();
+      const group = groups.find(g => String(g.id) === targetId);
+      if (group) { group.blocked = true; await saveGroups(groups); done = true; }
+    }
+
+    await ctx.reply(done ? `⛔ ID <code>${targetId}</code> berhasil diblokir.` : `⚠️ ID tidak ditemukan.`, { parse_mode: 'HTML' });
+  } catch (e) {
+    await ctx.reply('❌ Error: ' + e.message);
+  }
+});
+
+bot.command('unblokir', async (ctx) => {
+  if (!isAdmin(ctx)) return;
+  const targetId = ctx.message.text.split(' ')[1]?.trim();
+  if (!targetId) return ctx.reply('⚠️ Format: /unblokir [chat_id]');
+
+  try {
+    let done = false;
+
+    const users = await getUsersDetails();
+    const user = users.find(u => String(u.id) === targetId);
+    if (user) { user.blocked = false; await saveUsers(users); done = true; }
+
+    if (!done) {
+      const groups = await getGroupsDetails();
+      const group = groups.find(g => String(g.id) === targetId);
+      if (group) { group.blocked = false; await saveGroups(groups); done = true; }
+    }
+
+    await ctx.reply(done ? `✅ ID <code>${targetId}</code> berhasil dibuka blokir.` : `⚠️ ID tidak ditemukan.`, { parse_mode: 'HTML' });
+  } catch (e) {
+    await ctx.reply('❌ Error: ' + e.message);
+  }
+});
+
 // ── Auto-register on normal messages ───────────────────────────────────────
 bot.on('message', async (ctx) => {
-  const chatId  = ctx.chat.id;
   const isGroup = ctx.chat.type === 'group' || ctx.chat.type === 'supergroup';
   if (ctx.message.text?.startsWith('/')) return;
 
   try {
     if (isGroup) {
-      await addGroup(chatId);
+      await addGroup(ctx.chat);
     } else {
-      await addUser(chatId);
+      await addUser(ctx.from);
     }
   } catch (error) {
     console.error('Message handler error:', error);

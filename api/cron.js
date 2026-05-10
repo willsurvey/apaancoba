@@ -1,5 +1,5 @@
 import { Bot } from 'grammy';
-import { getUsers, getGroups } from '../lib/kv-store.js';
+import { getActiveUserIds, getActiveGroupIds } from '../lib/kv-store.js';
 import { fetchScreeningData } from '../lib/api-fetcher.js';
 import { formatCronBroadcast } from '../lib/message-mapper.js';
 
@@ -40,8 +40,8 @@ export async function GET() {
 }
 
 async function broadcast(messages) {
-  const users  = await getUsers();
-  const groups = await getGroups();
+  const users  = await getActiveUserIds();
+  const groups = await getActiveGroupIds();
   const chats  = [...users, ...groups];
 
   console.log(`Broadcasting to ${chats.length} chat(s)`);
