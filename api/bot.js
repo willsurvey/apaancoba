@@ -29,22 +29,49 @@ const bot = new Bot(process.env.BOT_TOKEN, {
   },
 });
 
-// ── Middleware: Block Check ────────────────────────────────────────────────
+// ── Middleware: Registered & Block Check ───────────────────────────────────
 bot.use(async (ctx, next) => {
   const chatId = String(ctx.chat?.id);
   if (!chatId || chatId === 'undefined') return await next();
 
   const isGroup = ctx.chat?.type === 'group' || ctx.chat?.type === 'supergroup';
+  const text = ctx.message?.text || '';
+
+  // Izinkan command /start agar user bisa mendaftar
+  if (text.startsWith('/start')) {
+    return await next();
+  }
+
+  let isRegistered = false;
+  let isBlocked = false;
   
   if (isGroup) {
     const groups = await getGroupsDetails();
     const group = groups.find(g => String(g.id) === chatId);
-    if (group && group.blocked) return;
+    if (group) {
+      isRegistered = true;
+      isBlocked = group.blocked;
+    }
   } else {
     const users = await getUsersDetails();
     const user = users.find(u => String(u.id) === chatId);
-    if (user && user.blocked) return;
+    if (user) {
+      isRegistered = true;
+      isBlocked = user.blocked;
+    }
   }
+
+  // Jika diblokir, abaikan sepenuhnya
+  if (isBlocked) return;
+
+  // Jika belum terdaftar dan mencoba menggunakan command
+  if (!isRegistered && text.startsWith('/')) {
+    await ctx.reply('⚠️ <b>Akses Ditolak</b>\n\nAnda belum terdaftar di sistem kami. Silakan ketik /start terlebih dahulu untuk mendaftar dan menggunakan fitur bot ini.', { parse_mode: 'HTML' });
+    return; // Hentikan eksekusi, jangan lanjut ke handler command
+  }
+
+  // Jika belum terdaftar dan mengirim chat biasa, abaikan
+  if (!isRegistered) return;
 
   await next();
 });
@@ -229,21 +256,7 @@ bot.command('unblokir', async (ctx) => {
   }
 });
 
-// ── Auto-register on normal messages ───────────────────────────────────────
-bot.on('message', async (ctx) => {
-  const isGroup = ctx.chat.type === 'group' || ctx.chat.type === 'supergroup';
-  if (ctx.message.text?.startsWith('/')) return;
-
-  try {
-    if (isGroup) {
-      await addGroup(ctx.chat);
-    } else {
-      await addUser(ctx.from);
-    }
-  } catch (error) {
-    console.error('Message handler error:', error);
-  }
-});
+// (Auto-register pada chat biasa telah dihapus agar user wajib menggunakan /start)
 
 // ── Serverless Handlers ────────────────────────────────────────────────────
 export async function POST(req) {
