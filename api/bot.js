@@ -36,10 +36,14 @@ bot.use(async (ctx, next) => {
 
   const isGroup = ctx.chat?.type === 'group' || ctx.chat?.type === 'supergroup';
   const text = ctx.message?.text || '';
+  const fromUser = ctx.from;
 
-  // Izinkan command /start agar user bisa mendaftar
-  if (text.startsWith('/start')) {
-    return await next();
+  // Wajib memiliki username untuk user pribadi
+  if (!isGroup && !fromUser?.username) {
+    if (text.startsWith('/')) {
+      await ctx.reply('⚠️ <b>Akses Ditolak</b>\n\nAkun Telegram Anda tidak memiliki <b>Username</b>.\nSilakan buat Username terlebih dahulu di menu <b>Pengaturan Telegram</b>, lalu ketik /start kembali.', { parse_mode: 'HTML' });
+    }
+    return; // Hentikan proses, tidak bisa menggunakan bot
   }
 
   let isRegistered = false;
@@ -51,6 +55,11 @@ bot.use(async (ctx, next) => {
     if (group) {
       isRegistered = true;
       isBlocked = group.blocked;
+      
+      // Auto-update judul grup jika berubah
+      if (group.title !== (ctx.chat?.title || '-')) {
+        addGroup(ctx.chat).catch(e => console.error('Auto-update group error:', e));
+      }
     }
   } else {
     const users = await getUsersDetails();
@@ -58,7 +67,17 @@ bot.use(async (ctx, next) => {
     if (user) {
       isRegistered = true;
       isBlocked = user.blocked;
+      
+      // Auto-update username/nama jika berubah
+      if (user.username !== fromUser.username || user.name !== (fromUser.first_name || '-')) {
+        addUser(fromUser).catch(e => console.error('Auto-update user error:', e));
+      }
     }
+  }
+
+  // Izinkan command /start agar user bisa mendaftar (setelah cek username lolos)
+  if (text.startsWith('/start')) {
+    return await next();
   }
 
   // Jika diblokir, abaikan sepenuhnya
